@@ -5,11 +5,28 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
 
-type Db = Arc<Mutex<HashMap<String, Bytes>>>;
+type SharededDb = Arc<Vec<Mutex<HashMap<String, Bytes>>>>;
+const DB_SIZE: usize = 8;
+
+fn key_to_shard_index<T>(obj: T) -> usize
+where
+    T: std::hash::Hash,
+{
+    use std::hash::Hasher;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    obj.hash(&mut hasher);
+    hasher.finish() as usize % DB_SIZE
+}
 
 #[tokio::main]
 async fn main() {
-    let db = Arc::new(Mutex::new(HashMap::new()));
+    let db = Arc::new({
+        let mut r = Vec::new();
+        for _ in 0..DB_SIZE {
+            r.push(Mutex::new(HashMap::new()));
+        }
+        r
+    });
 
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
 
@@ -22,20 +39,22 @@ async fn main() {
     }
 }
 
-async fn process(socket: TcpStream, db: Db) {
+async fn process(socket: TcpStream, db: SharededDb) {
     let mut connection = Connection::new(socket);
 
     while let Some(frame) = connection.read_frame().await.unwrap() {
         let response = match Command::from_frame(frame).unwrap() {
             Set(cmd) => {
-                let mut db = db.lock().unwrap();
+                let idx = key_to_shard_index(cmd.key());
+                let mut shard = db[idx].lock().unwrap();
                 println!("{:?}", cmd);
-                db.insert(cmd.key().to_string(), cmd.value().clone());
+                shard.insert(cmd.key().to_string(), cmd.value().clone());
                 Frame::Simple("OK".to_string())
             }
             Get(cmd) => {
-                let db = db.lock().unwrap();
-                if let Some(value) = db.get(cmd.key()) {
+                let idx = key_to_shard_index(cmd.key());
+                let shard = db[idx].lock().unwrap();
+                if let Some(value) = shard.get(cmd.key()) {
                     println!("{:?}", cmd);
                     Frame::Bulk(value.clone().into())
                 } else {
