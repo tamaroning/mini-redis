@@ -48,18 +48,18 @@ async fn process(socket: TcpStream, db: SharededDb) {
             Set(cmd) => {
                 let idx = key_to_shard_index(cmd.key());
                 let mut shard = db[idx].lock().unwrap();
-                println!("{:?}", cmd);
                 shard.insert(cmd.key().to_string(), cmd.value().clone());
+                println!("{:?} => OK", cmd);
                 Frame::Simple("OK".to_string())
             }
             Get(cmd) => {
                 let idx = key_to_shard_index(cmd.key());
                 let shard = db[idx].lock().unwrap();
                 if let Some(value) = shard.get(cmd.key()) {
-                    println!("{:?}", cmd);
+                    println!("{:?} => {:?}", cmd, value);
                     Frame::Bulk(value.clone().into())
                 } else {
-                    println!("Get failed {:?}", cmd);
+                    println!("{:?} => None", cmd);
                     Frame::Null
                 }
             }

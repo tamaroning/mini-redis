@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     // Spawn a task which Gets
     let t1 = tokio::spawn(async move {
         let cmd = Command::Get {
-            key: "hello".to_string(),
+            key: "foo".to_string(),
         };
         tx.send(cmd).await.unwrap();
     });
@@ -36,7 +36,8 @@ async fn main() -> Result<()> {
         while let Some(cmd) = rx.recv().await {
             match cmd {
                 Command::Get { key } => {
-                    client.get(&key).await.unwrap();
+                    let ret = client.get(&key).await.unwrap();
+                    println!("{:?}", ret);
                 }
                 Command::Set { key, val } => {
                     client.set(&key, val).await.unwrap();
