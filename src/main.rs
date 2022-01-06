@@ -31,6 +31,7 @@ async fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
 
     loop {
+        // Spawn a task when accepting a TCP connection
         let db = db.clone();
         let (socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
@@ -58,6 +59,7 @@ async fn process(socket: TcpStream, db: SharededDb) {
                     println!("{:?}", cmd);
                     Frame::Bulk(value.clone().into())
                 } else {
+                    println!("Get failed {:?}", cmd);
                     Frame::Null
                 }
             }
